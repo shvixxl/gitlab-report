@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "gitlab-report"
+dynamic = ["version"]
+description = "A tool to generate GitLab reports."
+authors = [
+    { name = "Kirill T.", email = "contact@shvix.dev" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas ~= 2.2.2",
+    "pydantic ~= 2.7.0",
+    "python-gitlab ~= 4.4.0",
+    "typer ~= 0.12.2",
+]
+
+[project.scripts]
+gitlab-report = "gitlab_report.cli:app"
