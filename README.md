@@ -4,7 +4,13 @@ Python script for creating GitLab reports for Issues. Reports can be produced in
 
 ## Dependencies
 
-This script is built using [Pandas](https://pandas.pydata.org), [Pydantic](https://pydantic.dev), [python-gitlab](https://python-gitlab.readthedocs.io) and [Typer](https://typer.tiangolo.com).
+- [Mistune](https://mistune.lepture.com) for rendering Markdown reports to HTML format.
+- [Pydantic](https://pydantic.dev) for configuration validation.
+- [`python-gitlab`](https://python-gitlab.readthedocs.io) for communicating with GitLab's REST API.
+- [Typer](https://typer.tiangolo.com) for CLI interface.
+- [`wkhtmltopdf`](https://wkhtmltopdf.org) for rendering HTML reports to PDF format.
+
+All dependencies except `wkhtmltopdf` will be installed using `pip` during [Installation](#installation).
 
 ## Installation
 
@@ -13,6 +19,20 @@ python3 -m pip install <path>
 ```
 
 where `<path>` is a directory where you cloned this repository or a URL to the repository.
+
+To generate PDF reports the `wkhtmltopdf` binary must be installed:
+
+- **Debian / Ubuntu**
+
+  ```shell
+  sudo apt-get install wkhtmltopdf
+  ```
+
+- **macOS using Homebrew**
+
+  ```shell
+  brew install --cask wkhtmltopdf
+  ```
 
 ## Usage
 
