@@ -34,18 +34,26 @@ where `<config-file>` is a JSON file which content is described in [Configuratio
 
 You can also specify following options:
 
+- `--url` or `-u` - URL of the GitLab instance. Defaults to `https://gitlab.com`.
+- `--access-token` - either personal, project or group access token for the GitLab API.
+- `--oauth-token` - OAuth 2.0 access token for the GitLab API.
 - `--output-dir` or `-o` - path to a directory where all created reports will be saved, by default all reports will be saved in current directory.
 - `--prefix` or `-p` - prefix for the report filenames, by default current date is used as prefix.
 - `--format` or `-f` - format of the report (`pdf`, `excel`, `html`, `markdown`, `json`). Multiple formats can be specified by using this option multiple times, e.g. `-f pdf -f json -f markdown`. By default script produces reports in PDF format.
+- `--ca-file` - path to a custom CA file for SSL verification.
+- `--skip-ssl` - skip SSL verification.
+
+### Environment variables
+
+This script also supports some configuration via environment variables:
+
+- `GITLAB_URL` - URL of the GitLab instance.
+- `GITLAB_ACCESS_TOKEN` - either personal, project or group access token for the GitLab API.
+- `GITLAB_OAUTH_TOKEN` - OAuth 2.0 access token for the GitLab API.
 
 ## Configuration
 
-Configuration for this script is provided via a JSON file. At its minimum it should have following properties:
-
-- `url` - GitLab server URL, e.g. `https://gitlab.com`.
-- `private_token` or `oauth_token` - either personal, project or group access tokens or an OAuth 2.0 access token.
-
-You can also customize reports by providing following properties:
+Report configuration is a JSON file with following properties:
 
 - `title` - title for the report, it could be your company name.
 - `image` - image attached the report, for example your company logo.
@@ -57,22 +65,24 @@ Optionally, you set a period for the report:
 
 ### Sections
 
-Report consists of sections. They are configured in `sections` array in the configuration, each section configuration is an object with following properties:
+Report consists of sections. They are configured in `sections` property as array of section configurations. Each section configuration is an object with following properties:
 
 - `title` - title of the section.
 
 #### Filters
 
-You can narrow report results using following properties for filtering:
+You can narrow report results using following properties for filtering.
 
-- `group` - a group path or an array of group paths.
-- `project` - a project path or an array of project paths, e.g. `my-group/my-project`.
-- `assignee` - a assignee username array of assignee usernames.
-- `label` - a label name or an array of label names.
 - `type` - an issue type or an array of issue types (`"issue"`, `"incident"`, `"test_case"` or `"task"`).
 - `state` - an issue state or an array of issue states (`"opened"`, `"closed"`).
+- `author` - an author ID or an array of author user IDs.
+- `assignee` - an assignee ID or an array of assignee IDs.
+- `label` - a label name or an array of label names.
+- `group` - a group ID or an array of group IDs.
+- `project` - a project ID or an array of project paths, e.g. `my-group/my-project`.
+- `overdue` - either `true` or `false`.
 
-`"None"` and `"Any"` can be used as values to match issues with either no values for selected key or with at least any value, e.g. issues with no assignees or with at least one label.
+`"None"` and `"Any"` keywords can be used as values to match issues with either no values for selected key or with at least some value, e.g. issues with no assignees or with issues with any labels.
 
 #### Groups
 
@@ -80,6 +90,7 @@ Since by default all issues are grouped into a single group, you would probably 
 
 - `"group"` - by groups.
 - `"project"` - by projects.
+- `"author"` - by author.
 - `"assignee"` - by assignees.
 - `"label"` - by label.
 - `"type"` - by type.
@@ -96,7 +107,7 @@ Example groups:
 ```json
 {
   "name": "Closed Incidents and Issues",
-  "type": ["incident", "issues"],
+  "type": ["incident", "issue"],
   "state": "closed"
 }
 ```
@@ -128,11 +139,12 @@ Example:
 ```json
 [
   {
-    "title": "Total",
-  },
-  {
     "title": "Incidents",
     "type": "incident"
+  },
+  {
+    "title": "Overdue",
+    "overdue": true
   }
 ]
 ```
@@ -141,50 +153,105 @@ Example:
 
 ```json
 {
-  "url": "https://gitlab.com",
-  "private_token": "glpat-EXAMPLe8EwWRx5yDxM5q",
-  "title": "Example",
-  "image": "https://example.com/image.jpg",
+  "title": "My Company - Issues Report",
+  "image": "https://example.com/image.png",
+  "period_from": "2024-04-01",
   "sections": [
     {
-      "title": "Open Issues",
-      "states": [
-        "opened"
-      ],
+      "title": "All Issues",
       "group_by": [
+        {
+          "title": "Active issues (Assigned)",
+          "assignee": "Any"
+        },
         {
           "title": "Incidents",
           "type": "incident"
         },
         {
-          "title": "Issues",
-          "types": "issue"
-        }
-      ],
-      "columns": [
-        {
-          "title": "Assigned",
-          "assignee": "Any"
+          "title": "Closed",
+          "state": "closed"
         },
         {
-          "title": "Unassigned",
-          "assignees": "None"
+          "title": "On going",
+          "label": "Any"
+        },
+        {
+          "title": "Pending",
+          "label": "None"
+        },
+        {
+          "title": "Overdue",
+          "overdue": true
         }
       ]
     },
     {
-      "title": "Projects",
-      "group_by": "project",
+      "title": "Groups ranking",
+      "group_by": "group",
       "columns": [
         {
-          "title": "Total"
+          "title": "Number of Incidents",
+          "type": "incident"
+        }
+      ]
+    },
+    {
+      "title": "Top 10 Projects",
+      "group_by": "project",
+      "limit": 10,
+      "columns": [
+        {
+          "title": "Number of Incidents",
+          "type": "incident"
+        }
+      ]
+    },
+    {
+      "title": "Selected Groups",
+      "group_by": [
+        {
+          "title": "Group 1",
+          "project": 85655869
         },
         {
-          "title": "Incidents",
-          "types": ["incident"]
+          "title": "Subgroup 1",
+          "project": 85836532
+        },
+        {
+          "title": "Total"
+        }
+      ],
+      "columns": [
+        {
+          "title": "Number of Incidents",
+          "type": "incident"
+        }
+      ]
+    },
+    {
+      "title": "Selected Projects",
+      "group_by": [
+        {
+          "title": "Project 2",
+          "project": 56844097
+        },
+        {
+          "title": "Project 3",
+          "project": 56844101
+        },
+        {
+          "title": "Total"
+        }
+      ],
+      "columns": [
+        {
+          "title": "Number of Incidents",
+          "type": "incident"
         }
       ]
     }
   ]
 }
+
 ```

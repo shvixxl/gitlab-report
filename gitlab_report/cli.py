@@ -1,3 +1,4 @@
+import importlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -7,9 +8,8 @@ import typer
 from typing_extensions import Annotated
 
 from . import __version__
-from .components import Report
-from .config import ReportConfig, ReportFormat
-from .export import export_dump
+from .export import Format
+from .report import ReportConfig, create_report
 
 app = typer.Typer(
     add_completion=False,
@@ -38,6 +38,29 @@ def report(
         ),
     ],
     *,
+    url: Annotated[
+        str,
+        typer.Option(
+            "--url",
+            "-u",
+            help="URL of the GitLab instance.",
+            envvar="GITLAB_URL",
+        ),
+    ] = "https://gitlab.com",
+    access_token: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Either personal, project or group access token for the GitLab API.",
+            envvar="GITLAB_ACCESS_TOKEN",
+        ),
+    ] = None,
+    oauth_token: Annotated[
+        Optional[str],
+        typer.Option(
+            help="OAuth 2.0 access token for the GitLab API.",
+            envvar="GITLAB_OAUTH_TOKEN",
+        ),
+    ] = None,
     output_dir: Annotated[
         Path,
         typer.Option(
@@ -57,15 +80,30 @@ def report(
         ),
     ] = datetime.now().strftime("%Y-%m-%d"),
     formats: Annotated[
-        list[ReportFormat],
+        list[Format],
         typer.Option(
             "--format",
             "-f",
             help="Formats for the report.",
         ),
-    ] = [ReportFormat.PDF],
+    ] = [Format.JSON],
+    ca_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            help="Path to a custom CA file for SSL verification.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    skip_ssl: Annotated[
+        bool,
+        typer.Option(
+            "--skip-ssl",
+            help="Skip SSL verification.",
+        ),
+    ] = False,
     version: Annotated[
-        Optional[bool],
+        bool,
         typer.Option(
             "--version",
             "-v",
@@ -73,15 +111,23 @@ def report(
             callback=version_callback,
             is_eager=True,
         ),
-    ] = None,
+    ] = False,
 ) -> None:
     """Create GitLab report."""
     with config_file.open() as file:
         config = ReportConfig(**json.load(file))
 
-    report = Report(config)
-    report.load()
+    report = create_report(
+        config,
+        url=url,
+        access_token=access_token,
+        oauth_token=oauth_token,
+        skip_ssl=skip_ssl,
+        ca_file=ca_file,
+    )
 
-    dump = report.dump()
-
-    export_dump(dump, output_dir=output_dir, prefix=prefix, formats=formats)
+    for format in formats:
+        exporter = importlib.import_module(
+            f"gitlab_report.export.{format.name.lower()}"
+        )
+        exporter.export(report, output_dir=output_dir, prefix=prefix)
