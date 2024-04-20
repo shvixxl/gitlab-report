@@ -1,68 +1,41 @@
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
-
-from .blocks.section import Section, SectionConfig
-from .database import Database
-
-
-class ReportConfig(BaseModel):
-    """Configuration for the report."""
-
-    title: str = "GitLab Report"
-    image: str | None = None
-
-    period_from: datetime | None = None
-    period_to: datetime | None = None
-
-    sections: list[SectionConfig] = Field(default_factory=list)
-
-
-@dataclass
-class Report:
-    """A GitLab report."""
-
-    title: str
-    image: str | None
-
-    period_from: datetime | None
-    period_to: datetime | None
-
-    sections: list[Section]
+from .config import Config
+from .gitlab import create_session, get_groups
+from .reports import (
+    create_html_report,
+    create_json_report,
+    create_markdown_report,
+    create_pdf_report,
+)
 
 
 def create_report(
-    config: ReportConfig,
+    config: Config,
     *,
-    url: str,
-    access_token: str | None = None,
-    oauth_token: str | None = None,
-    skip_ssl: bool = False,
-    ca_file: Path | None = None,
-) -> Report:
-    """Create a GitLab report."""
-    with Database(
-        url=url,
-        access_token=access_token,
-        oauth_token=oauth_token,
-        skip_ssl=skip_ssl,
-        ca_file=ca_file,
-    ) as db:
-        issues = db.get_issues(
-            created_after=config.period_from,
-            created_before=config.period_to,
+    output_dir: Path,
+    prefix: str,
+) -> None:
+    """Create GitLab report."""
+    with create_session(
+        url=str(config.url),
+        access_token=config.access_token,
+        oauth_token=config.oauth_token,
+    ) as session:
+        groups = get_groups(
+            session,
+            with_issues_created_after=config.period.from_,
+            with_issues_created_before=config.period.to,
         )
 
-    sections = [Section(section_config) for section_config in config.sections]
-    for section in sections:
-        section.load(issues)
+    create_json_report(config, groups, output_dir=output_dir, prefix=prefix)
 
-    return Report(
-        title=config.title,
-        image=config.image,
-        period_from=config.period_from,
-        period_to=config.period_to,
-        sections=sections,
+    markdown_report_path = create_markdown_report(
+        config, groups, output_dir=output_dir, prefix=prefix
     )
+
+    html_report_path = create_html_report(
+        config, markdown_report_path, output_dir=output_dir, prefix=prefix
+    )
+
+    create_pdf_report(html_report_path, output_dir=output_dir, prefix=prefix)

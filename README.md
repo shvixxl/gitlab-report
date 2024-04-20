@@ -1,6 +1,6 @@
 # GitLab Report
 
-Python script for creating GitLab reports for Issues. Reports can be produced in PDF, Excel, HTML, Markdown and JSON formats.
+Python script for creating GitLab reports for Issues. Reports are produced in PDF, HTML, Markdown and JSON formats.
 
 ## Dependencies
 
@@ -8,9 +8,7 @@ Python script for creating GitLab reports for Issues. Reports can be produced in
 - [Pydantic](https://pydantic.dev) for configuration validation.
 - [`python-gitlab`](https://python-gitlab.readthedocs.io) for communicating with GitLab's REST API.
 - [Typer](https://typer.tiangolo.com) for CLI interface.
-- [`wkhtmltopdf`](https://wkhtmltopdf.org) for rendering HTML reports to PDF format.
-
-All dependencies except `wkhtmltopdf` will be installed using `pip` during [Installation](#installation).
+- [`xhtml2pdf`](https://xhtml2pdf.readthedocs.io/en/latest/) for rendering HTML reports to PDF format.
 
 ## Installation
 
@@ -19,20 +17,6 @@ python3 -m pip install <path>
 ```
 
 where `<path>` is a directory where you cloned this repository or a URL to the repository.
-
-To generate PDF reports the `wkhtmltopdf` binary must be installed:
-
-- **Debian / Ubuntu**
-
-  ```shell
-  sudo apt-get install wkhtmltopdf
-  ```
-
-- **macOS using Homebrew**
-
-  ```shell
-  brew install --cask wkhtmltopdf
-  ```
 
 ## Usage
 
@@ -54,224 +38,93 @@ where `<config-file>` is a JSON file which content is described in [Configuratio
 
 You can also specify following options:
 
-- `--url` or `-u` - URL of the GitLab instance. Defaults to `https://gitlab.com`.
-- `--access-token` - either personal, project or group access token for the GitLab API.
-- `--oauth-token` - OAuth 2.0 access token for the GitLab API.
 - `--output-dir` or `-o` - path to a directory where all created reports will be saved, by default all reports will be saved in current directory.
 - `--prefix` or `-p` - prefix for the report filenames, by default current date is used as prefix.
-- `--format` or `-f` - format of the report (`pdf`, `excel`, `html`, `markdown`, `json`). Multiple formats can be specified by using this option multiple times, e.g. `-f pdf -f json -f markdown`. By default script produces reports in PDF format.
-- `--ca-file` - path to a custom CA file for SSL verification.
-- `--skip-ssl` - skip SSL verification.
-
-### Environment variables
-
-This script also supports some configuration via environment variables:
-
-- `GITLAB_URL` - URL of the GitLab instance.
-- `GITLAB_ACCESS_TOKEN` - either personal, project or group access token for the GitLab API.
-- `GITLAB_OAUTH_TOKEN` - OAuth 2.0 access token for the GitLab API.
 
 ## Configuration
 
 Report configuration is a JSON file with following properties:
 
-- `title` - title for the report, it could be your company name.
-- `image` - image attached the report, for example your company logo.
+- `url` - URL of the GitLab instance, defaults to `https://gitlab.com`
+- `access_token` - either personal, project or group access token for the GitLab API.
+- `oauth_token` - OAuth 2.0 access token for the GitLab API.
+- `title` - title for the report.
+- `company` - name of the company
+- `logo` - image to attach to the report as a logo.
 
-Optionally, you set a period for the report:
+> Either `access_token` or `oauth_token` must be provided.
 
-- `period_from` - starting period.
-- `period_to` - ending period.
+Optionally, you can set a period for the report in `period` object with following properties:
+
+- `from` - starting period.
+- `to` - ending period.
+
+> Period is used for filtering issues by their creation date.
 
 ### Sections
 
-Report consists of sections. They are configured in `sections` property as array of section configurations. Each section configuration is an object with following properties:
+Report consists of three sections: Issues, Groups and Projects.
 
-- `title` - title of the section.
+#### Issues
 
-#### Filters
+Configured in `issues` object. There are several options:
 
-You can narrow report results using following properties for filtering.
+- `ongoing` - an array of labels that filters "ongoing" issues.
+- `pending` - an array of labels that filters "pending" issues.
 
-- `type` - an issue type or an array of issue types (`"issue"`, `"incident"`, `"test_case"` or `"task"`).
-- `state` - an issue state or an array of issue states (`"opened"`, `"closed"`).
-- `author` - an author ID or an array of author user IDs.
-- `assignee` - an assignee ID or an array of assignee IDs.
-- `label` - a label name or an array of label names.
-- `group` - a group ID or an array of group IDs.
-- `project` - a project ID or an array of project paths, e.g. `my-group/my-project`.
-- `overdue` - either `true` or `false`.
+You can also configure stat comments in `stats` object:
 
-`"None"` and `"Any"` keywords can be used as values to match issues with either no values for selected key or with at least some value, e.g. issues with no assignees or with issues with any labels.
+- `incidents_solving_rate` - solving rate for incident issues (closed incidents / created incidents).
+- `solving_rate` - solving rate for all issues (closed / created).
+- `average_delay` - average delay in days for overdue issues (days since due date for opened issues or days since due date until closed at date for closed issues)
 
 #### Groups
 
-Since by default all issues are grouped into a single group, you would probably want to change it by specifying `group_by` property. There are a few basic groupings available:
+Configured in `groups` object. You can configure the `top` option here which affects the amount of groups showed in the result table.
 
-- `"group"` - by groups.
-- `"project"` - by projects.
-- `"author"` - by author.
-- `"assignee"` - by assignees.
-- `"label"` - by label.
-- `"type"` - by type.
-- `"state"` - by state.
+#### Projects
 
-It is also possible to create reports with more advanced grouping by providing an array of group configurations. Each group configuration is an object with following properties:
+Configured in `projects` object. As well as `top` option from [Groups](#groups), you can also configure custom subsections with a selection of projects you want to include.
 
-- `title` - title of the group.
-
-And filtering properties described in [Filters](#filters) section above, but if omitted, the group will match all issues.
-
-Example groups:
+### Example
 
 ```json
 {
-  "name": "Closed Incidents and Issues",
-  "type": ["incident", "issue"],
-  "state": "closed"
-}
-```
-
-```json
-{
-  "name": "Opened without assignee",
-  "assignee": "None",
-  "state": "opened"
-}
-```
-
-```json
-{
-  "name": "All Issues"
-}
-```
-
-#### Columns
-
-By default, reports only show the total amount of issues in each group. Custom columns can be configured in a `columns` property. Each column configuration is an object with following properties:
-
-- `title` - title of the column.
-
-And filtering properties described in [Filters](#filters) section above, but if omitted, the column will count all issues.
-
-Example:
-
-```json
-[
-  {
-    "title": "Incidents",
-    "type": "incident"
+  "url": "https://gitlab.com",
+  "access_token": "glpat-EXAMPLE",
+  "title": "Activity Report",
+  "company": "Company Name",
+  "logo": "./Logo.jpg",
+  "period": {
+    "from": "2024-04-01",
+    "to": "2024-05-01"
   },
-  {
-    "title": "Overdue",
-    "overdue": true
-  }
-]
-```
-
-### Example configuration
-
-```json
-{
-  "title": "My Company - Issues Report",
-  "image": "https://example.com/image.png",
-  "period_from": "2024-04-01",
-  "sections": [
-    {
-      "title": "All Issues",
-      "group_by": [
-        {
-          "title": "Active issues (Assigned)",
-          "assignee": "Any"
-        },
-        {
-          "title": "Incidents",
-          "type": "incident"
-        },
-        {
-          "title": "Closed",
-          "state": "closed"
-        },
-        {
-          "title": "On going",
-          "label": "Any"
-        },
-        {
-          "title": "Pending",
-          "label": "None"
-        },
-        {
-          "title": "Overdue",
-          "overdue": true
-        }
-      ]
-    },
-    {
-      "title": "Groups ranking",
-      "group_by": "group",
-      "columns": [
-        {
-          "title": "Number of Incidents",
-          "type": "incident"
-        }
-      ]
-    },
-    {
-      "title": "Top 10 Projects",
-      "group_by": "project",
-      "limit": 10,
-      "columns": [
-        {
-          "title": "Number of Incidents",
-          "type": "incident"
-        }
-      ]
-    },
-    {
-      "title": "Selected Groups",
-      "group_by": [
-        {
-          "title": "Group 1",
-          "project": 85655869
-        },
-        {
-          "title": "Subgroup 1",
-          "project": 85836532
-        },
-        {
-          "title": "Total"
-        }
-      ],
-      "columns": [
-        {
-          "title": "Number of Incidents",
-          "type": "incident"
-        }
-      ]
-    },
-    {
-      "title": "Selected Projects",
-      "group_by": [
-        {
-          "title": "Project 2",
-          "project": 56844097
-        },
-        {
-          "title": "Project 3",
-          "project": 56844101
-        },
-        {
-          "title": "Total"
-        }
-      ],
-      "columns": [
-        {
-          "title": "Number of Incidents",
-          "type": "incident"
-        }
-      ]
+  "issues": {
+    "ongoing": [
+      "ToDo",
+      "Develop"
+    ],
+    "pending": [],
+    "stats": {
+      "incidents_solving_rate": "> 1 ok",
+      "solving_rate": "> 1 ok",
+      "average_delay": "< 5 Good"
     }
-  ]
+  },
+  "groups": {
+    "top": "All"
+  },
+  "projects": {
+    "top": 10,
+    "Custom Name 1": [
+      "Project 3",
+      "Project 10"
+    ],
+    "Custom Name 2": [
+      "Project 1",
+      "Project 8",
+      "Project 6"
+    ]
+  }
 }
-
 ```
