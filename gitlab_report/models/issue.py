@@ -1,7 +1,22 @@
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, computed_field
 from pytz import UTC
+
+
+class IssueState(str, Enum):
+    """The state of the GitLab issue."""
+
+    OPENED = "opened"
+    CLOSED = "closed"
+
+
+class IssueType(str, Enum):
+    """The type of the GitLab issue."""
+
+    INCIDENT = "INCIDENT"
+    ISSUE = "ISSUE"
 
 
 class Issue(BaseModel):
@@ -13,8 +28,8 @@ class Issue(BaseModel):
     group: str
     project: str
 
-    type: str
     state: str
+    type: str
     labels: list[str]
 
     due_date: datetime | None
@@ -31,14 +46,14 @@ class Issue(BaseModel):
 
         due_date = self.due_date.replace(tzinfo=UTC)
 
-        if self.state == "closed" and self.closed_at:
+        if self.state == IssueState.CLOSED and self.closed_at:
             closed_at = self.closed_at.replace(tzinfo=UTC)
             if closed_at > due_date:
                 return (closed_at - due_date).days
             return None
 
         now = datetime.now(tz=UTC)
-        if self.state == "opened" and now > due_date:
+        if self.state == IssueState.OPENED and now > due_date:
             return (now - due_date).days
 
         return None

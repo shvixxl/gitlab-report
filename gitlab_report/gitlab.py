@@ -38,11 +38,11 @@ def get_groups(
     return [
         Group(
             id=group.id,
-            name=group.name,
+            name=group.full_name,
             projects=get_projects(
                 session=session,
                 group_id=group.id,
-                group_name=group.name,
+                group_name=group.full_name,
                 with_issues_created_after=with_issues_created_after,
                 with_issues_created_before=with_issues_created_before,
             ),
@@ -64,23 +64,40 @@ def get_projects(
 ) -> list[Project]:
     """Get a list of GitLab projects."""
     group = session.groups.get(group_id, lazy=True)
-    return [
-        Project(
-            id=project.id,
-            name=project.name,
-            issue_objects=get_issues(
-                session=session,
-                group_name=group_name,
-                project_id=project.id,
-                project_name=project.name,
-                created_after=with_issues_created_after,
-                created_before=with_issues_created_before,
-            ),
+
+    projects = []
+    for project in group.projects.list(iterator=True):
+        all_issues = get_issues(
+            session=session,
+            group_name=group_name,
+            project_id=project.id,
+            project_name=project.name,
         )
-        for project in group.projects.list(
-            iterator=True,
+        period_issues = all_issues
+        if with_issues_created_after:
+            created_after = with_issues_created_after.timestamp()
+            period_issues = [
+                issue
+                for issue in period_issues
+                if issue.created_at.timestamp() >= created_after
+            ]
+        if with_issues_created_before:
+            created_before = with_issues_created_before.timestamp()
+            period_issues = [
+                issue
+                for issue in period_issues
+                if issue.created_at.timestamp() <= created_before
+            ]
+        projects.append(
+            Project(
+                id=project.id,
+                name=project.name,
+                all_issues=all_issues,
+                period_issue=period_issues,
+            )
         )
-    ]
+
+    return projects
 
 
 def get_issues(
@@ -88,9 +105,6 @@ def get_issues(
     group_name: str,
     project_id: int,
     project_name: str,
-    *,
-    created_after: datetime | None = None,
-    created_before: datetime | None = None,
 ) -> list[Issue]:
     """Get a list of GitLab issues."""
     project = session.projects.get(project_id, lazy=True)
@@ -100,8 +114,8 @@ def get_issues(
             moved_to_id=issue.moved_to_id,
             group=group_name,
             project=project_name,
-            type=issue.type,
             state=issue.state,
+            type=issue.type,
             labels=issue.labels,
             due_date=issue.due_date,
             created_at=issue.created_at,
@@ -110,7 +124,5 @@ def get_issues(
         for issue in project.issues.list(
             iterator=True,
             assignee_id="Any",
-            created_after=created_after.isoformat() if created_after else None,
-            created_before=created_before.isoformat() if created_before else None,
         )
     ]

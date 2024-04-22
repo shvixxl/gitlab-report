@@ -84,7 +84,7 @@ Configured in `groups` object. You can configure the `top` option here which aff
 
 #### Projects
 
-Configured in `projects` object. As well as `top` option from [Groups](#groups), you can also configure custom subsections with a selection of projects you want to include.
+Configured in `projects` object. As well as `top` option from [Groups](#groups), you can also configure custom subsections with a selection of IDs of the projects you want to include.
 
 ### Example
 
@@ -117,13 +117,13 @@ Configured in `projects` object. As well as `top` option from [Groups](#groups),
   "projects": {
     "top": 10,
     "Custom Name 1": [
-      "Project 3",
-      "Project 10"
+      3,
+      10
     ],
     "Custom Name 2": [
-      "Project 1",
-      "Project 8",
-      "Project 6"
+      1,
+      8,
+      6
     ]
   }
 }

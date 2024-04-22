@@ -30,7 +30,7 @@ def create_json_report(
             issue
             for group in groups
             for project in group.projects
-            for issue in project.issue_objects
+            for issue in project.period_issue
         ],
         groups=groups,
         projects=[project for group in groups for project in group.projects],

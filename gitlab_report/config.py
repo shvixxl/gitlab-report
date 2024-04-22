@@ -81,4 +81,4 @@ class ProjectsConfig(GroupsConfig):
 
     model_config = ConfigDict(extra="allow")
 
-    __pydantic_extra__: dict[str, list[str]]  # type: ignore
+    __pydantic_extra__: dict[str, list[int]]  # type: ignore

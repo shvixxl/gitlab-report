@@ -3,7 +3,8 @@ from io import TextIOBase
 from pathlib import Path
 
 from ..config import Config
-from ..models import Group
+from ..models import Group, IssueType
+from ..models.issue import IssueState
 
 
 def create_markdown_report(
@@ -39,20 +40,20 @@ def add_header(
 
     file.write("| ")
 
-    info_block = f"<p>{config.title}</p>"
+    info_block = f"{config.title}<br>"
 
     if config.company:
-        info_block = f"<p>{config.company}<p>" + info_block
+        info_block = f"{config.company}<br>" + info_block
 
     if config.period.from_:
-        info_block += f"<p>Period from {config.period.from_.strftime('%m / %Y')} to "
+        info_block += f"Period from {config.period.from_.strftime('%m / %Y')} to "
     else:
         info_block += "Period until "
 
     if config.period.to:
-        info_block += config.period.to.strftime("%m / %Y</p>")
+        info_block += config.period.to.strftime("%m / %Y</br/")
     else:
-        info_block += datetime.now().strftime("%m / %Y (Today)</p>")
+        info_block += datetime.now().strftime("%m / %Y (Today)<br>")
 
     file.write(info_block)
     file.write(" | ")
@@ -88,39 +89,47 @@ def add_issues_section(
         issue
         for group in groups
         for project in group.projects
-        for issue in project.issue_objects
+        for issue in project.all_issues
     ]
     issues_total = len(issues)
     issues_percent = 100
 
-    incidents = [issue for issue in issues if issue.type == "incident"]
+    incidents = [issue for issue in issues if issue.type == IssueType.INCIDENT]
     incidents_total = len(incidents)
     incidents_percent = int(incidents_total / issues_total * 100) if issues_total else 0
 
-    # TODO: what are "created" issues?
-    created = [issue for issue in issues if issue.state == "opened"]
+    created = [
+        issue
+        for group in groups
+        for project in group.projects
+        for issue in project.period_issue
+    ]
     created_total = len(created)
     created_percent = int(created_total / issues_total * 100) if issues_total else 0
 
-    closed = [issue for issue in issues if issue.state == "closed"]
+    closed = [issue for issue in issues if issue.state == IssueState.CLOSED]
     closed_total = len(closed)
     closed_percent = int(closed_total / issues_total * 100) if issues_total else 0
 
+    opened = [issue for issue in issues if issue.state == IssueState.OPENED]
+
     ongoing = [
         issue
-        for issue in issues
-        if issue.state == "opened"
-        and any(label in issue.labels for label in config.issues.ongoing)
+        for issue in opened
+        if any(label in issue.labels for label in config.issues.ongoing)
     ]
     ongoing_total = len(ongoing)
     ongoing_percent = int(ongoing_total / issues_total * 100) if issues_total else 0
 
-    pending = [
-        issue
-        for issue in issues
-        if issue.state == "opened"
-        and any(label in issue.labels for label in config.issues.pending)
-    ]
+    pending = (
+        [
+            issue
+            for issue in opened
+            if any(label in issue.labels for label in config.issues.pending)
+        ]
+        if config.issues.pending
+        else [issue for issue in opened if not issue.labels]
+    )
     pending_total = len(pending)
     pending_percent = int(pending_total / issues_total * 100) if issues_total else 0
 
@@ -143,9 +152,17 @@ def add_issues_section(
 
     file.write("\n")
 
+    closed_in_period = [issue for issue in created if issue.state == IssueState.CLOSED]
+    incidents_created_in_period = [
+        issue for issue in created if issue.type == IssueType.INCIDENT
+    ]
+    incidents_closed_in_period = [
+        issue for issue in closed_in_period if issue.type == IssueType.INCIDENT
+    ]
+
     incidents_solving_rate = (
-        len([issue for issue in incidents if issue.state == "closed"]) / len(incidents)
-        if incidents
+        len(incidents_closed_in_period) / len(incidents_created_in_period)
+        if incidents_created_in_period
         else 0
     )
     file.write(
@@ -153,7 +170,7 @@ def add_issues_section(
         f"**{incidents_solving_rate:.1f}** ( {config.issues.stats.incidents_solving_rate} )\n\n"
     )
 
-    solving_rate = len(closed) / len(created) if created else 0
+    solving_rate = len(closed_in_period) / len(created) if created else 0
     file.write(
         "**Solving Rate** (Closed / Created): "
         f"**{solving_rate:.1f}** ( {config.issues.stats.solving_rate} )\n\n"
@@ -211,7 +228,7 @@ def add_group_section(
             f"| {f'{group.issues} (closed {group.closed_issues})':>16} "
             f"| {f'{total_percent}% (closed {closed_percent}%)':>14} "
             f"| {f'{group.incidents} (closed {group.closed_incidents})':>19} "
-            f"| {f'{incidents_percent}% (closed {closed_incidents_percent}%)':>14}% "
+            f"| {f'{incidents_percent}% (closed {closed_incidents_percent}%)':>14} "
             "|\n"
         )
 
@@ -267,13 +284,13 @@ def add_project_section(
 
     file.write("\n")
 
-    for title, project_names in config.projects.__pydantic_extra__.items():
-        add_custom_project_subsection(title, project_names, config, groups, file)
+    for title, project_ids in config.projects.__pydantic_extra__.items():
+        add_custom_project_subsection(title, project_ids, config, groups, file)
 
 
 def add_custom_project_subsection(
     title: str,
-    project_names: list[str],
+    project_ids: list[int],
     config: Config,
     groups: list[Group],
     file: TextIOBase,
@@ -292,7 +309,7 @@ def add_custom_project_subsection(
         project
         for group in groups
         for project in group.projects
-        if project.name in project_names
+        if project.id in project_ids
     ]
 
     for project in projects:
@@ -359,13 +376,9 @@ def add_custom_project_subsection(
 
     file.write("\n")
 
-    overdue = [
-        issue
-        for project in projects
-        for issue in project.issue_objects
-        if issue.delay is not None
-    ]
     average_delay = (
-        (sum(issue.delay for issue in overdue) / len(overdue)) if overdue else 0  # type: ignore
+        (sum(project.avg_delay for project in projects) / len(projects))
+        if projects
+        else 0
     )
     file.write("**Average Delay**: " f"**{average_delay:.1f} gg** ( < 5 Good )\n\n")

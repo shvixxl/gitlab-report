@@ -22,11 +22,7 @@ def create_report(
         access_token=config.access_token,
         oauth_token=config.oauth_token,
     ) as session:
-        groups = get_groups(
-            session,
-            with_issues_created_after=config.period.from_,
-            with_issues_created_before=config.period.to,
-        )
+        groups = get_groups(session)
 
     create_json_report(config, groups, output_dir=output_dir, prefix=prefix)
 
