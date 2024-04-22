@@ -163,14 +163,14 @@ def add_issues_section(
     incidents_solving_rate = (
         len(incidents_closed_in_period) / len(incidents_created_in_period)
         if incidents_created_in_period
-        else 0
+        else 1
     )
     file.write(
         "**Incidents Solving Rate** (Incidents Closed / Created): "
         f"**{incidents_solving_rate:.1f}** ( {config.issues.stats.incidents_solving_rate} )\n\n"
     )
 
-    solving_rate = len(closed_in_period) / len(created) if created else 0
+    solving_rate = len(closed_in_period) / len(created) if created else 1
     file.write(
         "**Solving Rate** (Closed / Created): "
         f"**{solving_rate:.1f}** ( {config.issues.stats.solving_rate} )\n\n"
