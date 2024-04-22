@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from pydantic import BaseModel, computed_field
+from pytz import UTC
 
 
 class Issue(BaseModel):
@@ -28,13 +29,16 @@ class Issue(BaseModel):
         if not self.due_date:
             return None
 
+        due_date = self.due_date.replace(tzinfo=UTC)
+
         if self.state == "closed" and self.closed_at:
-            if self.closed_at > self.due_date:
-                return (self.closed_at - self.due_date).days
+            closed_at = self.closed_at.replace(tzinfo=UTC)
+            if closed_at > due_date:
+                return (closed_at - due_date).days
             return None
 
-        now = datetime.now()
-        if self.state == "opened" and now > self.due_date:
-            return (datetime.now() - self.due_date).days
+        now = datetime.now(tz=UTC)
+        if self.state == "opened" and now > due_date:
+            return (now - due_date).days
 
         return None
