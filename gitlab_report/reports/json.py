@@ -37,6 +37,6 @@ def create_json_report(
     )
 
     with open(output_path, "w") as file:
-        file.write(report.model_dump_json(indent=2))
+        file.write(report.model_dump_json(by_alias=True, indent=2))
 
     return output_path
